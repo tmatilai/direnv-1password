@@ -21,6 +21,17 @@ from_op <<OP
     FIRST_SECRET=op://vault/item/field
     OTHER_SECRET=op://...
 OP
+
+# Multiple secrets can be fetched from a file as well.
+# direnv will reload when the file changes.
+from_op .1password
+
+# Only load a secret from OP if it wasn't already set in `.env`.
+dotenv_if_exists
+from_op --no-overwrite MY_SECRET=op://vault/item/field
+
+# Show the status of 1password while loading direnv.
+from_op --verbose MY_SECRET=op://vault/item/field
 ```
 
 ### Secrets reference
