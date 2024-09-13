@@ -35,8 +35,13 @@
 from_op() {
     local OP_VARIABLES=()
     local OP_FILES=()
+    local OVERWRITE_ENVVARS=1
     while [[ $# -gt 0 ]]; do
         case $1 in
+        --no-overwrite)
+            OVERWRITE_ENVVARS=0
+            shift
+            ;;
         --*)
             log_error "from_op: Unknown option: $1"
             return 1
@@ -65,6 +70,20 @@ from_op() {
         [[ "${#OP_FILES[@]}" == 0 ]] || cat "${OP_FILES[@]}"
         [[ -t 0 ]] || cat
     )"
+
+    if [[ "$OVERWRITE_ENVVARS" = "0" ]]; then
+        # Remove variables from OP_INPUT that are already set in the environment.
+        OP_INPUT="$(
+            echo "$OP_INPUT" | while read -r line; do
+                if [[ "$line" =~ ^([^=]+)= ]]; then
+                    VARIABLE_NAME="${BASH_REMATCH[1]}"
+                    if [[ -z "${!VARIABLE_NAME}" ]]; then
+                        echo "$line"
+                    fi
+                fi
+            done
+        )"
+    fi
 
     if ! has op; then
         log_error "1Password CLI 'op' not found"
