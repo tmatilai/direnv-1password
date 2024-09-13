@@ -43,33 +43,12 @@ from_op() {
     fi
 
     case "$(op --version)" in
-        1.*) __from_op1 ;;
-        *) __from_op2 ;;
-    esac < <(
-        # Concatenate function args and stdin (if any)
-        [[ $# == 0 ]] || printf '%s\n' "${@}"
-        [[ -t 0 ]] || cat
-    )
-}
+    1.*)
+        log_error "1Password CLI v1 is no longer supported. Please upgrade to 1password CLI v2. See https://developer.1password.com/docs/cli/upgrade/"
+        return 1
+        ;;
+    esac
 
-__from_op1() {
-    local pattern='^(.*)=op://([^/]*)/([^/]*)/([^/]*)$'
-    local skip='^(#|$)'
-    while read -r arg; do
-        if [[ $arg =~ $skip ]]; then
-            continue
-        elif [[ ! $arg =~ $pattern ]]; then
-            log_error "from_op: Failed to parse the argument: $arg"
-            return 1
-        fi
-        local m=("${BASH_REMATCH[@]}")
-        local var="${m[1]}" vault="${m[2]}" item="${m[3]}" field="${m[4]}" secret
-        secret="$(op get item --vault="$vault" "$item" --fields="$field" --cache)"
-        export "$var=$secret"
-    done
-}
-
-__from_op2() {
     local var val
     local -a op_sessions
 
@@ -79,7 +58,11 @@ __from_op2() {
         op_sessions+=("$var=$val")
     done
 
-    direnv_load op run --env-file /dev/stdin --no-masking -- direnv dump
+    direnv_load op run --env-file /dev/stdin --no-masking -- direnv dump < <(
+        # Concatenate function args and stdin (if any)
+        [[ $# == 0 ]] || printf '%s\n' "${@}"
+        [[ -t 0 ]] || cat
+    )
 
     for var in "${op_sessions[@]}"; do
         export "${var?}"

@@ -2,11 +2,6 @@
 
 This repository includes a [direnv](https://direnv.net) library/extension for fetching secrets using [1Password CLI](https://support.1password.com/command-line/).
 
-It is easy enough to use the 1Password CLI (`op`) directly, but versions 1 and 2 are not compatible. This library includes helpers which work with both versions.
-
-_**NOTE:** 1Password CLI v2 is still in **Early Access** phase. Likewise this library is still finding the best way to work with it._
-_The configuration syntax might still change, and compatibility can't be promised._
-
 ---
 
 ## Usage
@@ -62,7 +57,7 @@ Future versions of the library hopefully offer helpers for the login, too.
 ## Requirements
 
 - [direnv](https://direnv.net). Might/should work with any somehow recent v2 version. Developed initially with v2.30.
-- [1Password CLI](https://support.1password.com/command-line/) (`op`). Developed with v1.2 and 2.0.0-beta.8.
+- [1Password CLI 2.x](https://support.1password.com/command-line/) (`op`).
 - A shell supported by direnv. Bash v3+ should work.
 
 ---
