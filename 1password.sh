@@ -48,23 +48,11 @@ from_op() {
         return 1
         ;;
     esac
-
-    local var val
-    local -a op_sessions
-
-    # Store OP_SESSION_* variables, as `op run` removes them
-    for var in "${!OP_SESSION_@}"; do
-        eval "val=\$$var"
-        op_sessions+=("$var=$val")
-    done
-
-    direnv_load op run --env-file /dev/stdin --no-masking -- direnv dump < <(
+    local OP_INPUT
+    OP_INPUT="$(
         # Concatenate function args and stdin (if any)
         [[ $# == 0 ]] || printf '%s\n' "${@}"
         [[ -t 0 ]] || cat
-    )
-
-    for var in "${op_sessions[@]}"; do
-        export "${var?}"
-    done
+    )"
+    eval "$(direnv dotenv bash <(echo -n "$OP_INPUT" | op inject))"
 }
