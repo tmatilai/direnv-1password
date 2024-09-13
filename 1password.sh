@@ -36,10 +36,15 @@ from_op() {
     local OP_VARIABLES=()
     local OP_FILES=()
     local OVERWRITE_ENVVARS=1
+    local VERBOSE=0
     while [[ $# -gt 0 ]]; do
         case $1 in
         --no-overwrite)
             OVERWRITE_ENVVARS=0
+            shift
+            ;;
+        --verbose)
+            VERBOSE=1
             shift
             ;;
         --*)
@@ -84,6 +89,14 @@ from_op() {
             done
         )"
     fi
+
+    if [[ -z "$OP_INPUT" ]]; then
+        # There are no environment variables to load from op, no need to run op.
+        [[ "$VERBOSE" == "0" ]] || log_status "from_op: No variables to load from 1Password"
+        return 0
+    fi
+
+    [[ "$VERBOSE" == "0" ]] || log_status "from_op: Loading variables from 1Password"
 
     if ! has op; then
         log_error "1Password CLI 'op' not found"
