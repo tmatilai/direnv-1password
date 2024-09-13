@@ -33,10 +33,39 @@
 # Reads environment variable values from 1Password.
 #
 from_op() {
-    if [[ -t 0 ]] && [[ $# == 0 ]]; then
+    local OP_VARIABLES=()
+    local OP_FILES=()
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+        --*)
+            log_error "from_op: Unknown option: $1"
+            return 1
+            ;;
+        *=*)
+            OP_VARIABLES+=("$1")
+            shift
+            ;;
+        *)
+            OP_FILES+=("$1")
+            watch_file "$1"
+            shift
+            ;;
+        esac
+    done
+
+    if [[ -t 0 ]] && [[ ${#OP_VARIABLES[@]} == 0 ]] && [[ ${#OP_FILES[@]} == 0 ]]; then
         log_error "from_op: No input nor arguments given"
         return 1
     fi
+
+    local OP_INPUT
+    OP_INPUT="$(
+        # Concatenate variable-args, file-args and stdin.
+        printf '%s\n' "${OP_VARIABLES[@]}"
+        [[ "${#OP_FILES[@]}" == 0 ]] || cat "${OP_FILES[@]}"
+        [[ -t 0 ]] || cat
+    )"
+
     if ! has op; then
         log_error "1Password CLI 'op' not found"
         return 1
@@ -48,11 +77,6 @@ from_op() {
         return 1
         ;;
     esac
-    local OP_INPUT
-    OP_INPUT="$(
-        # Concatenate function args and stdin (if any)
-        [[ $# == 0 ]] || printf '%s\n' "${@}"
-        [[ -t 0 ]] || cat
-    )"
-    eval "$(direnv dotenv bash <(echo -n "$OP_INPUT" | op inject))"
+
+    eval "$(direnv dotenv bash <(echo "$OP_INPUT" | op inject))"
 }
