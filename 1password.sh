@@ -33,55 +33,82 @@
 # Reads environment variable values from 1Password.
 #
 from_op() {
-    if [[ -t 0 ]] && [[ $# == 0 ]]; then
+    local OP_VARIABLES=()
+    local OP_FILES=()
+    local OVERWRITE_ENVVARS=1
+    local VERBOSE=0
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+        --no-overwrite)
+            OVERWRITE_ENVVARS=0
+            shift
+            ;;
+        --verbose)
+            VERBOSE=1
+            shift
+            ;;
+        --*)
+            log_error "from_op: Unknown option: $1"
+            return 1
+            ;;
+        *=*)
+            OP_VARIABLES+=("$1")
+            shift
+            ;;
+        *)
+            OP_FILES+=("$1")
+            watch_file "$1"
+            shift
+            ;;
+        esac
+    done
+
+    if [[ -t 0 ]] && [[ ${#OP_VARIABLES[@]} == 0 ]] && [[ ${#OP_FILES[@]} == 0 ]]; then
         log_error "from_op: No input nor arguments given"
         return 1
     fi
+
+    local OP_INPUT
+    OP_INPUT="$(
+        # Concatenate variable-args, file-args and stdin.
+        printf '%s\n' "${OP_VARIABLES[@]}"
+        [[ "${#OP_FILES[@]}" == 0 ]] || cat "${OP_FILES[@]}"
+        [[ -t 0 ]] || cat
+    )"
+
+    if [[ "$OVERWRITE_ENVVARS" = "0" ]]; then
+        # Remove variables from OP_INPUT that are already set in the environment.
+        OP_INPUT="$(
+            echo "$OP_INPUT" | while read -r line; do
+                if [[ "$line" =~ ^([^=]+)= ]]; then
+                    VARIABLE_NAME="${BASH_REMATCH[1]}"
+                    if [[ -z "${!VARIABLE_NAME}" ]]; then
+                        echo "$line"
+                    fi
+                fi
+            done
+        )"
+    fi
+
+    if [[ -z "$OP_INPUT" ]]; then
+        # There are no environment variables to load from op, no need to run op.
+        [[ "$VERBOSE" == "0" ]] || log_status "from_op: No variables to load from 1Password"
+        return 0
+    fi
+
+    [[ "$VERBOSE" == "0" ]] || log_status "from_op: Loading variables from 1Password"
+
     if ! has op; then
         log_error "1Password CLI 'op' not found"
         return 1
     fi
 
     case "$(op --version)" in
-        1.*) __from_op1 ;;
-        *) __from_op2 ;;
-    esac < <(
-        # Concatenate function args and stdin (if any)
-        [[ $# == 0 ]] || printf '%s\n' "${@}"
-        [[ -t 0 ]] || cat
-    )
-}
+    1.*)
+        log_error "1Password CLI v1 is no longer supported. Please upgrade to 1password CLI v2. See https://developer.1password.com/docs/cli/upgrade/"
+        return 1
+        ;;
+    esac
 
-__from_op1() {
-    local pattern='^(.*)=op://([^/]*)/([^/]*)/([^/]*)$'
-    local skip='^(#|$)'
-    while read -r arg; do
-        if [[ $arg =~ $skip ]]; then
-            continue
-        elif [[ ! $arg =~ $pattern ]]; then
-            log_error "from_op: Failed to parse the argument: $arg"
-            return 1
-        fi
-        local m=("${BASH_REMATCH[@]}")
-        local var="${m[1]}" vault="${m[2]}" item="${m[3]}" field="${m[4]}" secret
-        secret="$(op get item --vault="$vault" "$item" --fields="$field" --cache)"
-        export "$var=$secret"
-    done
-}
-
-__from_op2() {
-    local var val
-    local -a op_sessions
-
-    # Store OP_SESSION_* variables, as `op run` removes them
-    for var in "${!OP_SESSION_@}"; do
-        eval "val=\$$var"
-        op_sessions+=("$var=$val")
-    done
-
-    direnv_load op run --env-file /dev/stdin --no-masking -- direnv dump
-
-    for var in "${op_sessions[@]}"; do
-        export "${var?}"
-    done
+    eval "$(direnv dotenv bash <(echo "$OP_INPUT" | op inject))"
 }

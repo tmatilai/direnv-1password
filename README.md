@@ -2,11 +2,6 @@
 
 This repository includes a [direnv](https://direnv.net) library/extension for fetching secrets using [1Password CLI](https://support.1password.com/command-line/).
 
-It is easy enough to use the 1Password CLI (`op`) directly, but versions 1 and 2 are not compatible. This library includes helpers which work with both versions.
-
-_**NOTE:** 1Password CLI v2 is still in **Early Access** phase. Likewise this library is still finding the best way to work with it._
-_The configuration syntax might still change, and compatibility can't be promised._
-
 ---
 
 ## Usage
@@ -15,8 +10,8 @@ Example `.envrc`:
 
 ```bash
 # Download the latest version. See below for other installation methods.
-source_url "https://github.com/tmatilai/direnv-1password/raw/v0.1.0/1password.sh" \
-    "sha256-EBpKlq0fYtsxTUCun/ppQIt10RUyhifGt+740l2CJlg="
+source_url "https://github.com/tmatilai/direnv-1password/raw/v1.0.0/1password.sh" \
+    "sha256-EGpCcHQA5inHmMmkvj+TqIjPeNzzvG4F+BUXfFKb1c0="
 
 # Fetch one secret and export it into the specified environment variable
 from_op MY_SECRET=op://vault/item/field
@@ -26,6 +21,17 @@ from_op <<OP
     FIRST_SECRET=op://vault/item/field
     OTHER_SECRET=op://...
 OP
+
+# Multiple secrets can be fetched from a file as well.
+# direnv will reload when the file changes.
+from_op .1password
+
+# Only load a secret from OP if it wasn't already set in `.env`.
+dotenv_if_exists
+from_op --no-overwrite MY_SECRET=op://vault/item/field
+
+# Show the status of 1password while loading direnv.
+from_op --verbose MY_SECRET=op://vault/item/field
 ```
 
 ### Secrets reference
@@ -62,7 +68,7 @@ Future versions of the library hopefully offer helpers for the login, too.
 ## Requirements
 
 - [direnv](https://direnv.net). Might/should work with any somehow recent v2 version. Developed initially with v2.30.
-- [1Password CLI](https://support.1password.com/command-line/) (`op`). Developed with v1.2 and 2.0.0-beta.8.
+- [1Password CLI 2.x](https://support.1password.com/command-line/) (`op`).
 - A shell supported by direnv. Bash v3+ should work.
 
 ---
