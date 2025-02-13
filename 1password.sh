@@ -110,5 +110,8 @@ from_op() {
         ;;
     esac
 
+    # Add quotes around the values to prevent word splitting.
+    OP_INPUT="$(echo "$OP_INPUT" | sed 's/^\([^=]*\)=\(.*\)$/\1="\2"/')"
+
     eval "$(direnv dotenv bash <(echo "$OP_INPUT" | op inject))"
 }
