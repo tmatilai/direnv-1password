@@ -110,5 +110,15 @@ from_op() {
         ;;
     esac
 
-    eval "$(direnv dotenv bash <(echo "$OP_INPUT" | op inject))"
+    eval "$(direnv dotenv bash <(
+        echo "$OP_INPUT" |
+        op inject |
+        # Convert KEY=VALUE to KEY='VALUE' to avoid direnv from substituting $ in values.
+        while read -r line
+        do
+            key="${line%%=*}"
+            value="${line#*=}"
+            echo "${key}=${value@Q}"
+        done
+    ))"
 }
