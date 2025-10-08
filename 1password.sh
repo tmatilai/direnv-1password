@@ -4,7 +4,7 @@
 # 1Password helpers for direnv configuration.
 #
 # VERSION:
-#    0.1.0
+#    0.1.1
 #
 # HOMEPAGE:
 #     https://github.com/tmatilai/direnv-1password
@@ -30,7 +30,13 @@
 #        OTHER_SECRET=op://...
 #    OP
 #
+#    from_op <<OP
+#        USERNAME=op item get <item-id> --fields username
+#        PASSWORD=op read "op://vault/item/password"
+#    OP
+#
 # Reads environment variable values from 1Password.
+# Supports op:// references and direct op commands.
 #
 from_op() {
     local OP_VARIABLES=()
@@ -112,13 +118,39 @@ from_op() {
 
     eval "$(direnv dotenv bash <(
         echo "$OP_INPUT" |
-        op inject |
-        # Convert KEY=VALUE to KEY='VALUE' to avoid direnv from substituting $ in values.
-        while read -r line
-        do
-            key="${line%%=*}"
-            value="${line#*=}"
-            echo "${key}=${value@Q}"
+        while IFS= read -r line; do
+            # Skip empty lines and comments
+            [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+
+            # Extract variable name and value/command
+            if [[ "$line" =~ ^([^=]+)=(.+)$ ]]; then
+                key="${BASH_REMATCH[1]}"
+                value="${BASH_REMATCH[2]}"
+
+                # Check if it's a direct op command (starts with 'op ')
+                if [[ "$value" =~ ^op[[:space:]] ]]; then
+                    result=$(eval "$value" 2>&1)
+                    if [[ $? -eq 0 ]]; then
+                        echo "${key}=${result@Q}"
+                    else
+                        log_error "from_op: Failed to execute: $value" >&2
+                        log_error "from_op: Error: $result" >&2
+                        exit 1
+                    fi
+                else
+                    # Use op inject for op:// references
+                    injected=$(echo "$line" | op inject 2>&1)
+                    if [[ $? -eq 0 ]]; then
+                        # Extract the value after injection
+                        injected_value="${injected#*=}"
+                        echo "${key}=${injected_value@Q}"
+                    else
+                        log_error "from_op: Failed to inject: $line" >&2
+                        log_error "from_op: Error: $injected" >&2
+                        exit 1
+                    fi
+                fi
+            fi
         done
     ))"
 }

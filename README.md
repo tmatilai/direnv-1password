@@ -22,6 +22,11 @@ from_op <<OP
     OTHER_SECRET=op://...
 OP
 
+# You can also use 'op item get' commands directly (without specifying a vault)
+from_op --verbose <<OP
+    MY_SECRET=op item get <item id> --format json --fields <field name> | jq -r .value
+OP
+
 # Multiple secrets can be fetched from a file as well.
 # direnv will reload when the file changes.
 from_op .1password
@@ -37,6 +42,8 @@ from_op --verbose MY_SECRET=op://vault/item/field
 ### Secrets reference
 
 The reference format is [described here](https://developer.1password.com/docs/cli/secrets-reference-syntax/). Vault, item and field can be referred either by name or ID.
+
+You can also use `op` commands directly (e.g., `op item get <item-id> --fields username`). This is useful for item IDs without specifying a vault, or for piping through tools like `jq`.
 
 With 1Password CLI v1 the section (referred in the docs) can not be used, so in some cases the item ID has to be used.
 
