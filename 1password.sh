@@ -118,6 +118,10 @@ from_op() {
         do
             key="${line%%=*}"
             value="${line#*=}"
+
+            # Sometimes $key can be empty
+            if [[ -z "$key" ]]; then continue; fi
+            
             echo "${key}=${value@Q}"
         done
     ))"
