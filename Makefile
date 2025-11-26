@@ -16,3 +16,7 @@ install:
 test:
 	shellcheck $(SH_FILES)
 	shfmt -d -i 4 -s -ci -bn $(SH_FILES)
+
+.PHONY: fmt
+fmt:
+	shfmt -w -i 4 -s -ci -bn $(SH_FILES)

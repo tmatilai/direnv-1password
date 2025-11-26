@@ -39,27 +39,27 @@ from_op() {
     local VERBOSE=0
     while [[ $# -gt 0 ]]; do
         case $1 in
-        --no-overwrite)
-            OVERWRITE_ENVVARS=0
-            shift
-            ;;
-        --verbose)
-            VERBOSE=1
-            shift
-            ;;
-        --*)
-            log_error "from_op: Unknown option: $1"
-            return 1
-            ;;
-        *=*)
-            OP_VARIABLES+=("$1")
-            shift
-            ;;
-        *)
-            OP_FILES+=("$1")
-            watch_file "$1"
-            shift
-            ;;
+            --no-overwrite)
+                OVERWRITE_ENVVARS=0
+                shift
+                ;;
+            --verbose)
+                VERBOSE=1
+                shift
+                ;;
+            --*)
+                log_error "from_op: Unknown option: $1"
+                return 1
+                ;;
+            *=*)
+                OP_VARIABLES+=("$1")
+                shift
+                ;;
+            *)
+                OP_FILES+=("$1")
+                watch_file "$1"
+                shift
+                ;;
         esac
     done
 
@@ -72,17 +72,17 @@ from_op() {
     OP_INPUT="$(
         # Concatenate variable-args, file-args and stdin.
         printf '%s\n' "${OP_VARIABLES[@]}"
-        [[ "${#OP_FILES[@]}" == 0 ]] || cat "${OP_FILES[@]}"
+        [[ ${#OP_FILES[@]} == 0 ]] || cat "${OP_FILES[@]}"
         [[ -t 0 ]] || cat
     )"
 
-    if [[ "$OVERWRITE_ENVVARS" = "0" ]]; then
+    if [[ $OVERWRITE_ENVVARS == "0" ]]; then
         # Remove variables from OP_INPUT that are already set in the environment.
         OP_INPUT="$(
             echo "$OP_INPUT" | while read -r line; do
-                if [[ "$line" =~ ^([^=]+)= ]]; then
+                if [[ $line =~ ^([^=]+)= ]]; then
                     VARIABLE_NAME="${BASH_REMATCH[1]}"
-                    if [[ -z "${!VARIABLE_NAME}" ]]; then
+                    if [[ -z ${!VARIABLE_NAME} ]]; then
                         echo "$line"
                     fi
                 fi
@@ -90,13 +90,13 @@ from_op() {
         )"
     fi
 
-    if [[ -z "$OP_INPUT" ]]; then
+    if [[ -z $OP_INPUT ]]; then
         # There are no environment variables to load from op, no need to run op.
-        [[ "$VERBOSE" == "0" ]] || log_status "from_op: No variables to load from 1Password"
+        [[ $VERBOSE == "0" ]] || log_status "from_op: No variables to load from 1Password"
         return 0
     fi
 
-    [[ "$VERBOSE" == "0" ]] || log_status "from_op: Loading variables from 1Password"
+    [[ $VERBOSE == "0" ]] || log_status "from_op: Loading variables from 1Password"
 
     if ! has op; then
         log_error "1Password CLI 'op' not found"
@@ -104,25 +104,25 @@ from_op() {
     fi
 
     case "$(op --version)" in
-    1.*)
-        log_error "1Password CLI v1 is no longer supported. Please upgrade to 1password CLI v2. See https://developer.1password.com/docs/cli/upgrade/"
-        return 1
-        ;;
+        1.*)
+            log_error "1Password CLI v1 is no longer supported. Please upgrade to 1password CLI v2. See https://developer.1password.com/docs/cli/upgrade/"
+            return 1
+            ;;
     esac
 
     eval "$(direnv dotenv bash <(
-        echo "$OP_INPUT" |
-        op inject |
-        # Convert KEY=VALUE to KEY='VALUE' to avoid direnv from substituting $ in values.
-        while read -r line
-        do
-            key="${line%%=*}"
-            value="${line#*=}"
+        echo "$OP_INPUT" \
+            | op inject \
+            |
+            # Convert KEY=VALUE to KEY='VALUE' to avoid direnv from substituting $ in values.
+            while read -r line; do
+                key="${line%%=*}"
+                value="${line#*=}"
 
-            # Sometimes $key can be empty
-            if [[ -z "$key" ]]; then continue; fi
-            
-            echo "${key}=${value@Q}"
-        done
+                # Sometimes $key can be empty
+                if [[ -z $key ]]; then continue; fi
+
+                echo "${key}=${value@Q}"
+            done
     ))"
 }
