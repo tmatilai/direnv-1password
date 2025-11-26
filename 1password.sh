@@ -23,6 +23,7 @@
 from_op() {
     local OP_VARIABLES=()
     local OP_FILES=()
+    local OP_OPTIONS=()
     local OVERWRITE_ENVVARS=1
     local VERBOSE=0
     local VALID_VAR_NAME_REGEX='^[A-Za-z_][A-Za-z0-9_]*$'
@@ -48,6 +49,14 @@ from_op() {
             --verbose)
                 VERBOSE=1
                 shift
+                ;;
+            --account)
+                if [[ $# -lt 2 ]]; then
+                    log_error "from_op: --account requires an argument"
+                    return 1
+                fi
+                OP_OPTIONS+=(--account "$2")
+                shift 2
                 ;;
             --*)
                 log_error "from_op: Unknown option: $1"
@@ -116,7 +125,7 @@ from_op() {
 
     # Run op inject first to catch and report errors before eval.
     local injected
-    if ! injected="$(printf '%s\n' "$OP_INPUT" | op inject)"; then
+    if ! injected="$(printf '%s\n' "$OP_INPUT" | op inject "${OP_OPTIONS[@]}")"; then
         log_error "from_op: 1Password injection failed"
         return 1
     fi

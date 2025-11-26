@@ -30,8 +30,9 @@ from_op .1password
 dotenv_if_exists
 from_op --no-overwrite MY_SECRET=op://vault/item/field
 
-# Show the status of 1password while loading direnv.
-from_op --verbose MY_SECRET=op://vault/item/field
+# Use a specific 1Password account.
+# Also show the status of 1Password while loading direnv.
+from_op --account my.1password.com --verbose MY_SECRET=op://vault/item/field
 ```
 
 ### Secrets reference
