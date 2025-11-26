@@ -10,8 +10,8 @@ Example `.envrc`:
 
 ```bash
 # Download the latest version. See below for other installation methods.
-source_url "https://github.com/tmatilai/direnv-1password/raw/v1.0.1/1password.sh" \
-    "sha256-4dmKkmlPBNXimznxeehplDfiV+CvJiIzg7H1Pik4oqY="
+source_url "https://github.com/tmatilai/direnv-1password/raw/v1.1.0/1password.sh" \
+    "sha256-JLh6cts1LNpmo7JeVgJ3NgmeHI3G7h2deYwkcpTweDI="
 
 # Fetch one secret and export it into the specified environment variable
 from_op MY_SECRET=op://vault/item/field
