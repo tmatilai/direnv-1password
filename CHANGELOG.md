@@ -1,3 +1,10 @@
+# 1.1.0 / 2025-11-26
+
+- Add `--account` option to specify which 1Password account to use.
+- Skip empty keys in parsing.
+- Fix `--no-overwrite` to respect variables set to empty values.
+- Improve error reporting and file input handling.
+
 # 1.0.1 / 2025-03-16
 
 - Allow special characters in passwords, like `$`, `"` or `\`.

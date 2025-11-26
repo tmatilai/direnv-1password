@@ -4,7 +4,7 @@
 # 1Password helpers for direnv configuration.
 #
 # VERSION:
-#    0.1.0
+#    1.1.0
 #
 # HOMEPAGE:
 #     https://github.com/tmatilai/direnv-1password
