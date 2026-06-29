@@ -133,6 +133,37 @@ BASH
     [ "$output" = "MY_SECRET=single-secret" ]
 }
 
+@test "loads an indented unset environment variable with --no-overwrite" {
+    envrc="$BATS_TEST_TMPDIR/envrc"
+    cat >"$envrc" <<'BASH'
+dotenv_if_exists
+from_op --no-overwrite <<OP
+    MY_SECRET=op://vault/item/field
+OP
+printf 'MY_SECRET=%s\n' "$MY_SECRET"
+BASH
+
+    run_envrc "$envrc"
+
+    [ "$status" -eq 0 ]
+    [ "$output" = "MY_SECRET=single-secret" ]
+}
+
+@test "loads a tab-indented unset environment variable with --no-overwrite" {
+    envrc="$BATS_TEST_TMPDIR/envrc"
+    printf '%s\n' \
+        'dotenv_if_exists' \
+        'from_op --no-overwrite <<OP' \
+        $'\tMY_SECRET=op://vault/item/field' \
+        'OP' \
+        "printf 'MY_SECRET=%s\\n' \"\$MY_SECRET\"" >"$envrc"
+
+    run_envrc "$envrc"
+
+    [ "$status" -eq 0 ]
+    [ "$output" = "MY_SECRET=single-secret" ]
+}
+
 @test "uses a specific 1Password account and logs status when verbose" {
     envrc="$BATS_TEST_TMPDIR/envrc"
     cat >"$envrc" <<'BASH'
