@@ -33,6 +33,10 @@ from_op --no-overwrite MY_SECRET=op://vault/item/field
 # Use a specific 1Password account.
 # Also show the status of 1Password while loading direnv.
 from_op --account my.1password.com --verbose MY_SECRET=op://vault/item/field
+
+# When running in GitHub Actions (`GITHUB_ACTIONS=true`) secret values are
+# masked in the logs by default. Disable it with `--no-gha-masking`.
+from_op --no-gha-masking MY_SECRET=op://vault/item/field
 ```
 
 ### Secrets reference
