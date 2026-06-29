@@ -3,6 +3,8 @@ SHELL = bash
 XDG_CONFIG_HOME ?= $(HOME)/.config
 
 SH_FILE = 1password.sh
+TEST_FILES = tests/*.bash tests/*.bats
+BATS ?= bats
 
 .PHONY: all
 all:
@@ -14,12 +16,13 @@ install:
 
 .PHONY: test
 test:
-	shellcheck $(SH_FILE)
-	shfmt -d -i 4 -s -ci -bn $(SH_FILE)
+	shellcheck $(SH_FILE) $(TEST_FILES)
+	shfmt -d -i 4 -s -ci -bn $(SH_FILE) $(TEST_FILES)
+	$(BATS) tests
 
 .PHONY: fmt
 fmt:
-	shfmt -w -i 4 -s -ci -bn $(SH_FILE)
+	shfmt -w -i 4 -s -ci -bn $(SH_FILE) $(TEST_FILES)
 
 # Print out the hash to be used in direnv configuration.
 .PHONY: hash
