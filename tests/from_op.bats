@@ -84,6 +84,20 @@ BASH
     [ "${lines[1]}" = "OTHER_SECRET=other-secret" ]
 }
 
+@test "preserves dollar signs in secret values" {
+    envrc="$BATS_TEST_TMPDIR/envrc"
+    cat >"$envrc" <<'BASH'
+from_op MY_SECRET=op://vault/dollar/field
+printf 'MY_SECRET=%s\n' "$MY_SECRET"
+BASH
+
+    run_envrc "$envrc"
+
+    [ "$status" -eq 0 ]
+    expected=MY_SECRET=pa\$\$word\$with\$dollars
+    [ "$output" = "$expected" ]
+}
+
 @test "fetches multiple secrets from a file and watches it" {
     secrets_file="$BATS_TEST_TMPDIR/.1password"
     cat >"$secrets_file" <<'BASH'

@@ -61,6 +61,9 @@ op() {
             op://vault/file/field)
                 value=file-secret
                 ;;
+            op://vault/dollar/field)
+                value=pa\$\$word\$with\$dollars
+                ;;
             *)
                 value="value-for-${reference}"
                 ;;
