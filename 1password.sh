@@ -26,7 +26,7 @@ from_op() {
     local OP_OPTIONS=()
     local OVERWRITE_ENVVARS=1
     local VERBOSE=0
-    local VALID_VAR_NAME_REGEX='^[A-Za-z_][A-Za-z0-9_]*$'
+    local VALID_VAR_NAME_REGEX='[A-Za-z_][A-Za-z0-9_]*'
 
     if ! has op; then
         log_error "1Password CLI 'op' not found"
@@ -104,7 +104,7 @@ from_op() {
                 [[ -z $line || $line =~ ^[[:space:]]*# ]] && continue
 
                 # Validate variable name matches shell identifier rules
-                if [[ $line =~ ^($VALID_VAR_NAME_REGEX)= ]]; then
+                if [[ $line =~ ^[[:space:]]*($VALID_VAR_NAME_REGEX)[[:space:]]*= ]]; then
                     VARIABLE_NAME="${BASH_REMATCH[1]}"
                     # Respect --no-overwrite even if the variable is set to empty.
                     if [[ -z ${!VARIABLE_NAME+x} ]]; then
@@ -140,7 +140,7 @@ from_op() {
                 value="${line#*=}"
 
                 # Validate key is a valid shell identifier
-                if [[ ! $key =~ $VALID_VAR_NAME_REGEX ]]; then
+                if [[ ! $key =~ ^$VALID_VAR_NAME_REGEX$ ]]; then
                     log_error "from_op: Invalid variable name: $key"
                     continue
                 fi
