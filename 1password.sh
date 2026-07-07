@@ -145,8 +145,12 @@ from_op() {
                     continue
                 fi
 
-                # Quote the value
-                printf '%s=%q\n' "$key" "$value"
+                # Quote the value using POSIX single-quote form (${var@Q}).
+                # NOTE: do not use `printf %q` here: it emits bash
+                # backslash-escapes (e.g. pa\$\$word) which `direnv dotenv`
+                # (a godotenv parser, not bash) does not understand and
+                # mangles, corrupting values that contain `$`.
+                printf '%s=%s\n' "$key" "${value@Q}"
             done
     ))"
 }
