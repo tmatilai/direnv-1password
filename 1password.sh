@@ -26,6 +26,8 @@ from_op() {
     local OP_OPTIONS=()
     local OVERWRITE_ENVVARS=1
     local VERBOSE=0
+    local GHA_MASKING=1
+    [[ ${GITHUB_ACTIONS:-} == "true" ]] || GHA_MASKING=0
     local VALID_VAR_NAME_REGEX='[A-Za-z_][A-Za-z0-9_]*'
 
     if ! has op; then
@@ -48,6 +50,10 @@ from_op() {
                 ;;
             --verbose)
                 VERBOSE=1
+                shift
+                ;;
+            --no-gha-masking)
+                GHA_MASKING=0
                 shift
                 ;;
             --account)
@@ -128,6 +134,16 @@ from_op() {
     if ! injected="$(printf '%s\n' "$OP_INPUT" | op inject "${OP_OPTIONS[@]}")"; then
         log_error "from_op: 1Password injection failed"
         return 1
+    fi
+
+    if [[ $GHA_MASKING -ne 0 ]]; then
+        # Mask secret values in GitHub Actions logs.
+        # See https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#using-workflow-commands-to-access-toolkit-functions
+        printf '%s\n' "$injected" \
+            | while read -r line; do
+                value="${line#*=}"
+                [[ -z $value ]] || echo "::add-mask::${value}"
+            done
     fi
 
     eval "$(direnv dotenv bash <(

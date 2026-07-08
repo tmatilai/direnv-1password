@@ -1,3 +1,7 @@
+# Unreleased
+
+- Mask secret values in GitHub Actions logs by default (when `$GITHUB_ACTIONS=true`). Add option `--no-gha-masking` to disable it.
+
 # 1.1.0 / 2025-11-26
 
 - Add `--account` option to specify which 1Password account to use.

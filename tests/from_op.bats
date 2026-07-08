@@ -192,3 +192,33 @@ BASH
     [[ $output == *"MY_SECRET=single-secret"* ]]
     [ "$(<"$OP_ARGS_LOG")" = "--account my.1password.com" ]
 }
+
+@test "masks secret values when running in GitHub Actions" {
+    envrc="$BATS_TEST_TMPDIR/envrc"
+    cat >"$envrc" <<'BASH'
+export GITHUB_ACTIONS=true
+from_op MY_SECRET=op://vault/item/field
+printf 'MY_SECRET=%s\n' "$MY_SECRET"
+BASH
+
+    run_envrc "$envrc"
+
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "::add-mask::single-secret" ]
+    [ "${lines[1]}" = "MY_SECRET=single-secret" ]
+}
+
+@test "does not mask secret values in GitHub Actions with --no-gha-masking" {
+    envrc="$BATS_TEST_TMPDIR/envrc"
+    cat >"$envrc" <<'BASH'
+export GITHUB_ACTIONS=true
+from_op --no-gha-masking MY_SECRET=op://vault/item/field
+printf 'MY_SECRET=%s\n' "$MY_SECRET"
+BASH
+
+    run_envrc "$envrc"
+
+    [ "$status" -eq 0 ]
+    [[ $output != *"::add-mask::"* ]]
+    [ "$output" = "MY_SECRET=single-secret" ]
+}
