@@ -16,8 +16,12 @@ log_status() {
 
 direnv() {
     if [[ $1 == dotenv && $2 == bash ]]; then
-        cat "${3:-/dev/stdin}"
-        return 0
+        # Delegate to the real direnv binary so tests exercise its actual
+        # dotenv (godotenv) parser. Using `cat` here would bypass parsing and
+        # let bash's own `eval` interpret the output, hiding quoting bugs such
+        # as `printf %q` backslash-escapes that direnv does not understand.
+        command direnv dotenv bash "${3:-/dev/stdin}"
+        return
     fi
 
     printf 'unexpected direnv invocation: %s\n' "$*" >&2
