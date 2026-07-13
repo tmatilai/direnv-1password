@@ -17,4 +17,4 @@ jobs:
             experimental-features = nix-command flakes
 
       - name: Run tests
-        run: nix develop --command make test
+        run: env --unset=GITHUB_ACTIONS nix develop --command make test
