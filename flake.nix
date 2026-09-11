@@ -23,6 +23,7 @@
             direnv
             shellcheck
             shfmt
+            zizmor
           ];
         };
       });
