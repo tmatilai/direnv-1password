@@ -17,6 +17,7 @@ source_url "https://github.com/tmatilai/direnv-1password/raw/v1.1.0/1password.sh
 from_op MY_SECRET=op://vault/item/field
 
 # Multiple secrets can be fetched by passing the items to the command's STDIN.
+# STDIN is read only when no variable or file arguments are given, or with `-`.
 # Blank lines and comments are ignored.
 from_op <<OP
     # Values are exported verbatim, including whitespace and newlines.
@@ -44,8 +45,6 @@ from_op --no-gha-masking MY_SECRET=op://vault/item/field
 ### Secrets reference
 
 The reference format is [described here](https://developer.1password.com/docs/cli/secrets-reference-syntax/). Vault, item and field can be referred either by name or ID.
-
-With 1Password CLI v1 the section (referred in the docs) can not be used, so in some cases the item ID has to be used.
 
 ### 1Password login
 

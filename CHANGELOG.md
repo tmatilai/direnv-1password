@@ -3,6 +3,8 @@
 - Export secret values verbatim: support multi-line values, and preserve leading and trailing whitespace.
 - Never log `op inject` output. Fail on invalid variable definitions instead of skipping them.
 - Ignore blank lines and comments in all input modes.
+- Read STDIN only when no variable or file arguments are given, or with an explicit `-` argument.
+- Drop the 1Password CLI v1 version check.
 - URL-encode masked values in GitHub Actions so masking works for values with `%` or newlines.
 - Mask secret values in GitHub Actions logs by default (when `$GITHUB_ACTIONS=true`). Add option `--no-gha-masking` to disable it.
 

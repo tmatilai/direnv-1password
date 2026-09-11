@@ -337,3 +337,124 @@ BASH
     [ "$status" -eq 1 ]
     [ "$output" = "ERROR: from_op: Unexpected output from 'op inject'" ]
 }
+
+@test "ignores stdin when arguments are given" {
+    envrc="$BATS_TEST_TMPDIR/envrc"
+    cat >"$envrc" <<'BASH'
+from_op MY_SECRET=op://vault/item/field <<OP
+OTHER_SECRET=op://vault/other/field
+OP
+printf 'MY_SECRET=%s\n' "$MY_SECRET"
+printf 'OTHER_SECRET=%s\n' "${OTHER_SECRET:-unset}"
+BASH
+
+    run_envrc "$envrc"
+
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "MY_SECRET=single-secret" ]
+    [ "${lines[1]}" = "OTHER_SECRET=unset" ]
+}
+
+@test "reads stdin in addition to arguments with -" {
+    envrc="$BATS_TEST_TMPDIR/envrc"
+    cat >"$envrc" <<'BASH'
+from_op MY_SECRET=op://vault/item/field - <<OP
+OTHER_SECRET=op://vault/other/field
+OP
+printf 'MY_SECRET=%s\n' "$MY_SECRET"
+printf 'OTHER_SECRET=%s\n' "$OTHER_SECRET"
+BASH
+
+    run_envrc "$envrc"
+
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "MY_SECRET=single-secret" ]
+    [ "${lines[1]}" = "OTHER_SECRET=other-secret" ]
+}
+
+@test "warns about an unreadable file and continues" {
+    envrc="$BATS_TEST_TMPDIR/envrc"
+    cat >"$envrc" <<'BASH'
+from_op missing.1password MY_SECRET=op://vault/item/field
+printf 'MY_SECRET=%s\n' "$MY_SECRET"
+BASH
+
+    run_envrc "$envrc"
+
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "ERROR: from_op: Cannot read file: missing.1password" ]
+    [ "${lines[1]}" = "MY_SECRET=single-secret" ]
+    [ "$(<"$WATCH_FILE_LOG")" = "missing.1password" ]
+}
+
+@test "fails on an unknown option" {
+    envrc="$BATS_TEST_TMPDIR/envrc"
+    cat >"$envrc" <<'BASH'
+from_op --bogus MY_SECRET=op://vault/item/field
+BASH
+
+    run_envrc "$envrc"
+
+    [ "$status" -eq 1 ]
+    [ "$output" = "ERROR: from_op: Unknown option: --bogus" ]
+    [ ! -s "$OP_ARGS_LOG" ]
+}
+
+@test "fails when --account has no argument" {
+    envrc="$BATS_TEST_TMPDIR/envrc"
+    cat >"$envrc" <<'BASH'
+from_op MY_SECRET=op://vault/item/field --account
+BASH
+
+    run_envrc "$envrc"
+
+    [ "$status" -eq 1 ]
+    [ "$output" = "ERROR: from_op: --account requires an argument" ]
+    [ ! -s "$OP_ARGS_LOG" ]
+}
+
+@test "fails without exporting anything when op inject fails" {
+    envrc="$BATS_TEST_TMPDIR/envrc"
+    cat >"$envrc" <<'BASH'
+op() { printf 'op: not signed in\n' >&2; return 1; }
+from_op MY_SECRET=op://vault/item/field
+printf 'MY_SECRET=%s\n' "${MY_SECRET:-unset}"
+BASH
+
+    run_envrc "$envrc"
+
+    [ "$status" -eq 1 ]
+    [ "${lines[0]}" = "op: not signed in" ]
+    [ "${lines[1]}" = "ERROR: from_op: 1Password injection failed" ]
+}
+
+@test "logs when there is nothing to load with --verbose" {
+    envrc="$BATS_TEST_TMPDIR/envrc"
+    cat >"$envrc" <<'BASH'
+MY_SECRET=from-dotenv
+from_op --verbose --no-overwrite MY_SECRET=op://vault/item/field
+printf 'MY_SECRET=%s\n' "$MY_SECRET"
+BASH
+
+    run_envrc "$envrc"
+
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "STATUS: from_op: No variables to load from 1Password" ]
+    [ "${lines[1]}" = "MY_SECRET=from-dotenv" ]
+    [ ! -s "$OP_ARGS_LOG" ]
+}
+
+@test "exports variables named like the function's locals" {
+    envrc="$BATS_TEST_TMPDIR/envrc"
+    cat >"$envrc" <<'BASH'
+from_op VERBOSE=op://vault/first/field line=op://vault/other/field
+printf 'VERBOSE=%s\n' "$VERBOSE"
+printf 'line=%s\n' "$line"
+BASH
+
+    run_envrc "$envrc"
+
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "VERBOSE=first-secret" ]
+    [ "${lines[1]}" = "line=other-secret" ]
+}

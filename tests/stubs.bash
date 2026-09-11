@@ -26,11 +26,6 @@ dotenv_if_exists() {
 # Mimics `op inject`: replaces secret references, passes all other text
 # through verbatim.
 op() {
-    if [[ $1 == --version ]]; then
-        printf '2.30.0\n'
-        return 0
-    fi
-
     if [[ $1 != inject ]]; then
         printf 'unexpected op invocation: %s\n' "$*" >&2
         return 1
