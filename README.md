@@ -48,26 +48,24 @@ The reference format is [described here](https://developer.1password.com/docs/cl
 
 ### 1Password login
 
-For the `from_op` command (or actually the underlying `op` command) to work, a valid 1Password session has to exist.
+`from_op` runs `op inject`, which needs an authenticated `op`. direnv evaluates `.envrc` without a terminal, so `op` cannot ask for a password there. There are three ways to authenticate:
 
-One option is to [sign in](https://support.1password.com/command-line-reference/#signin) manually before `.envrc` evaluation. For example:
+- **Desktop app integration.** With the [app integration](https://developer.1password.com/docs/cli/app-integration/) enabled, `op` asks the 1Password app for authorization. The `.envrc` evaluation waits until the prompt is answered.
+- **Manual sign-in.** [Sign in](https://support.1password.com/command-line-reference/#signin) in the shell before the `.envrc` evaluation, then run `direnv reload`:
 
-```bash
-# Bash, ZSH, etc.
-eval $(op signin ACCOUNT)
-```
+  ```bash
+  # Bash, ZSH, etc.
+  eval $(op signin ACCOUNT)
+  ```
 
-```fish
-# Fish
-eval (op signin ACCOUNT)
-```
+  ```fish
+  # Fish
+  eval (op signin ACCOUNT)
+  ```
 
-The `.envrc` evaluation can then be forced with e.g. `direnv reload`.
+- **Service account or 1Password Connect.** Set `OP_SERVICE_ACCOUNT_TOKEN`, or `OP_CONNECT_HOST` and `OP_CONNECT_TOKEN`. Every `op` call then authenticates on its own. This is the option for CI.
 
-Other option is to add the `op signin` command into the `.envrc`, but that will block the evaluation.
-This might go against the best practices with direnv, as `.envrc` evaluations should in general be fast and non-blocking. But you decide.
-
-Future versions of the library hopefully offer helpers for the login, too.
+Running `op signin` inside `.envrc` does not work, as there is no terminal to type the password into.
 
 ---
 
