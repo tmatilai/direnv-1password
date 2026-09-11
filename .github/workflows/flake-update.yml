@@ -1,0 +1,41 @@
+name: Update flake.lock
+
+on:
+  schedule:
+    - cron: "0 6 1 * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+
+      - run: nix flake update
+
+      - run: nix develop --command make test
+
+      # Note: a PR opened with GITHUB_TOKEN does not trigger the Test workflow.
+      # Set the FLAKE_UPDATE_TOKEN secret (fine-grained PAT: contents + pull requests write) to fix that.
+      - env:
+          GH_TOKEN: ${{ secrets.FLAKE_UPDATE_TOKEN || github.token }}
+        run: |
+          git diff --quiet flake.lock && exit 0
+          gh auth setup-git
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git switch -c flake-update
+          git commit -m "chore: update flake.lock" flake.lock
+          git push --force origin flake-update
+          gh pr list --head flake-update --json number --jq length | grep -q '^0$' || exit 0
+          gh pr create --title "chore: update flake.lock" --body "Automated \`nix flake update\`."
