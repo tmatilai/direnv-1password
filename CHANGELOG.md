@@ -1,6 +1,8 @@
 # Unreleased
 
 - Mask secret values in GitHub Actions logs by default (when `$GITHUB_ACTIONS=true`). Add option `--no-gha-masking` to disable it.
+- Add `from_op_signin` helper to check for and optionally establish a 1Password session.
+- Add option `--signin` to `from_op` to ensure a session before fetching secrets. Off by default.
 
 # 1.1.0 / 2025-11-26
 

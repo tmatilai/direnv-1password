@@ -34,6 +34,14 @@ from_op --no-overwrite MY_SECRET=op://vault/item/field
 # Also show the status of 1Password while loading direnv.
 from_op --account my.1password.com --verbose MY_SECRET=op://vault/item/field
 
+# Make sure that a 1Password session exists before fetching the secrets.
+# If no account is configured, this checks/signs in to my.1password.com.
+# Without `--signin` the session is never checked. See "1Password login" below.
+from_op --signin MY_SECRET=op://vault/item/field
+
+# Check the session separately, without ever prompting.
+from_op_signin --no-interactive || return
+
 # When running in GitHub Actions (`GITHUB_ACTIONS=true`) secret values are
 # masked in the logs by default. Disable it with `--no-gha-masking`.
 from_op --no-gha-masking MY_SECRET=op://vault/item/field
@@ -61,12 +69,52 @@ eval $(op signin ACCOUNT)
 eval (op signin ACCOUNT)
 ```
 
-The `.envrc` evaluation can then be forced with e.g. `direnv reload`.
+The `.envrc` evaluation can then be forced with e.g. `direnv reload`. This is still the recommended flow.
 
-Other option is to add the `op signin` command into the `.envrc`, but that will block the evaluation.
-This might go against the best practices with direnv, as `.envrc` evaluations should in general be fast and non-blocking. But you decide.
+#### Session helpers
 
-Future versions of the library hopefully offer helpers for the login, too.
+The session is never checked unless you ask for it. Plain `from_op` runs no extra commands, and behaves exactly like it does without any of the options below.
+
+Adding `--signin` verifies that a usable session exists before any secret is fetched, and tries to establish one if it does not. You then get an actionable error instead of a generic injection failure:
+
+```bash
+from_op --signin MY_SECRET=op://vault/item/field
+```
+
+If you do not pass `--account` and `OP_ACCOUNT` is not set, the helper checks and signs in with `--account my.1password.com`. This avoids the interactive 1Password account picker that `op signin` can show when multiple accounts are available. Use `--account ACCOUNT` or set `OP_ACCOUNT` when you want a different account:
+
+```bash
+from_op --signin --account team.1password.com MY_SECRET=op://vault/item/field
+```
+
+The same check is available on its own as the `from_op_signin` command. For example, to check the session without ever prompting, and to stop the evaluation if there is none:
+
+```bash
+from_op_signin --no-interactive || return
+```
+
+It accepts the following options:
+
+- `--account ACCOUNT` - use a specific 1Password account.
+- `--no-interactive` - only check for a session, never try to establish one.
+- `--timeout SECONDS` - how long 1Password is waited for. Defaults to 10.
+- `--quiet` / `--verbose` - suppress or expand the output. By default the command is silent unless it fails.
+
+And returns:
+
+- `0` when the session is usable,
+- `1` when there is none and it could not be established,
+- `2` when the 1Password CLI is not installed.
+
+The command is not hostile to `set -e`, so `from_op_signin || true` works if you want to ignore the result.
+
+#### Blocking behaviour
+
+Signing in can block, as it waits for the request to be approved in the 1Password app, and that is exactly why it is opt-in: `.envrc` evaluations should in general be fast and non-blocking.
+
+Note that direnv evaluates `.envrc` without a terminal. `op` is therefore always run without one, and can not ask for a password or an account selection: only the 1Password app integration, including the biometric unlock, can answer without terminal input. Signing in with a password stays a manual step, as described above. Use `from_op_signin --no-interactive` when you want a check that never tries to sign in at all. Either way the wait is bounded by `--timeout`.
+
+When `OP_SERVICE_ACCOUNT_TOKEN`, or both `OP_CONNECT_HOST` and `OP_CONNECT_TOKEN`, are set, `op` authenticates on every invocation and there is no session to check. The check is then skipped altogether, which keeps CI environments fast.
 
 ---
 

@@ -3,9 +3,16 @@
 setup() {
     REPO_ROOT=$(cd "$BATS_TEST_DIRNAME/.." && pwd)
     export OP_ARGS_LOG="$BATS_TEST_TMPDIR/op-args.log"
+    export OP_WHOAMI_LOG="$BATS_TEST_TMPDIR/op-whoami.log"
+    export OP_SIGNIN_LOG="$BATS_TEST_TMPDIR/op-signin.log"
+    export OP_SESSION_SENTINEL="$BATS_TEST_TMPDIR/op-session"
+    export OP_STUB_BIN="$BATS_TEST_TMPDIR/bin"
     export WATCH_FILE_LOG="$BATS_TEST_TMPDIR/watch-file.log"
     : >"$OP_ARGS_LOG"
+    : >"$OP_WHOAMI_LOG"
+    : >"$OP_SIGNIN_LOG"
     : >"$WATCH_FILE_LOG"
+    rm -f "$OP_SESSION_SENTINEL"
 }
 
 run_envrc() {
@@ -193,6 +200,91 @@ BASH
     [[ $output == *"STATUS: from_op: Loading variables from 1Password"* ]]
     [[ $output == *"MY_SECRET=single-secret"* ]]
     [ "$(<"$OP_ARGS_LOG")" = "--account my.1password.com" ]
+}
+
+@test "does not check the 1Password session without --signin" {
+    envrc="$BATS_TEST_TMPDIR/envrc"
+    cat >"$envrc" <<'BASH'
+export OP_STUB_SIGNED_IN=0
+from_op MY_SECRET=op://vault/item/field
+printf 'MY_SECRET=%s\n' "$MY_SECRET"
+BASH
+
+    run_envrc "$envrc"
+
+    [ "$status" -eq 0 ]
+    [ "$output" = "MY_SECRET=single-secret" ]
+    [ ! -s "$OP_WHOAMI_LOG" ]
+    [ ! -s "$OP_SIGNIN_LOG" ]
+}
+
+@test "signs in before fetching secrets with --signin" {
+    envrc="$BATS_TEST_TMPDIR/envrc"
+    cat >"$envrc" <<'BASH'
+export OP_STUB_SIGNED_IN=0
+from_op --signin MY_SECRET=op://vault/item/field
+printf 'MY_SECRET=%s\n' "$MY_SECRET"
+BASH
+
+    run_envrc "$envrc"
+
+    [ "$status" -eq 0 ]
+    [ "$output" = "MY_SECRET=single-secret" ]
+    [[ $(<"$OP_WHOAMI_LOG") == *"--account my.1password.com"* ]]
+    [[ $(<"$OP_SIGNIN_LOG") == *"--account my.1password.com"* ]]
+    [ "$(wc -l <"$OP_SIGNIN_LOG")" -eq 1 ]
+    [ -z "$(<"$OP_ARGS_LOG")" ]
+}
+
+@test "does not fetch secrets when --signin fails" {
+    envrc="$BATS_TEST_TMPDIR/envrc"
+    cat >"$envrc" <<'BASH'
+export OP_STUB_SIGNED_IN=0
+export OP_STUB_SIGNIN_SUCCEEDS=0
+rc=0
+from_op --signin MY_SECRET=op://vault/item/field || rc=$?
+printf 'exit=%s\n' "$rc"
+BASH
+
+    run_envrc "$envrc"
+
+    [ "$status" -eq 0 ]
+    [[ $output == *"exit=1"* ]]
+    [[ $output == *"ERROR: from_op_signin: No active 1Password session"* ]]
+    [[ $output != *"1Password injection failed"* ]]
+    [ ! -s "$OP_ARGS_LOG" ]
+}
+
+@test "passes the account to both the session check and the injection with --signin" {
+    envrc="$BATS_TEST_TMPDIR/envrc"
+    cat >"$envrc" <<'BASH'
+from_op --signin --account my.1password.com MY_SECRET=op://vault/item/field
+printf 'MY_SECRET=%s\n' "$MY_SECRET"
+BASH
+
+    run_envrc "$envrc"
+
+    [ "$status" -eq 0 ]
+    [ "$output" = "MY_SECRET=single-secret" ]
+    [[ $(<"$OP_WHOAMI_LOG") == *"--account my.1password.com"* ]]
+    [ "$(<"$OP_ARGS_LOG")" = "--account my.1password.com" ]
+}
+
+@test "does not check the session when there is nothing to load with --signin" {
+    envrc="$BATS_TEST_TMPDIR/envrc"
+    cat >"$envrc" <<'BASH'
+MY_SECRET=from-dotenv
+dotenv_if_exists
+from_op --signin --no-overwrite MY_SECRET=op://vault/item/field
+printf 'MY_SECRET=%s\n' "$MY_SECRET"
+BASH
+
+    run_envrc "$envrc"
+
+    [ "$status" -eq 0 ]
+    [ "$output" = "MY_SECRET=from-dotenv" ]
+    [ ! -s "$OP_WHOAMI_LOG" ]
+    [ ! -s "$OP_ARGS_LOG" ]
 }
 
 @test "masks secret values when running in GitHub Actions" {
