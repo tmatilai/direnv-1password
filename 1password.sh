@@ -102,71 +102,76 @@ from_op() {
         [[ -t 0 ]] || cat
     )"
 
-    if [[ $OVERWRITE_ENVVARS -eq 0 ]]; then
-        # Remove variables from OP_INPUT that are already set in the environment.
-        OP_INPUT="$(
-            printf '%s\n' "$OP_INPUT" | while read -r line; do
-                # Skip empty lines and comments
-                [[ -z $line || $line =~ ^[[:space:]]*# ]] && continue
+    # Build the `op inject` template: one "NAME=reference" line per variable,
+    # each followed by a marker line. Values may span multiple lines, so the
+    # marker is what tells the output parser where a value ends.
+    local marker="# from_op end ${RANDOM}${RANDOM}"
+    local keys=()
+    local template=""
+    local line key
+    while IFS= read -r line; do
+        # Trim whitespace, skip blank lines and comments.
+        line="${line#"${line%%[![:space:]]*}"}"
+        line="${line%"${line##*[![:space:]]}"}"
+        [[ -z $line || $line == \#* ]] && continue
 
-                # Validate variable name matches shell identifier rules
-                if [[ $line =~ ^[[:space:]]*($VALID_VAR_NAME_REGEX)[[:space:]]*= ]]; then
-                    VARIABLE_NAME="${BASH_REMATCH[1]}"
-                    # Respect --no-overwrite even if the variable is set to empty.
-                    if [[ -z ${!VARIABLE_NAME+x} ]]; then
-                        printf '%s\n' "$line"
-                    fi
-                fi
-            done
-        )"
-    fi
+        if [[ ! $line =~ ^($VALID_VAR_NAME_REGEX)= ]]; then
+            log_error "from_op: Invalid variable definition: $line"
+            return 1
+        fi
+        key="${BASH_REMATCH[1]}"
 
-    if [[ -z $OP_INPUT ]]; then
-        # There are no environment variables to load from op, no need to run op.
+        # Respect --no-overwrite even if the variable is set to empty.
+        if [[ $OVERWRITE_ENVVARS -eq 0 && -n ${!key+x} ]]; then
+            continue
+        fi
+
+        keys+=("$key")
+        template+="$line"$'\n'"$marker"$'\n'
+    done <<<"$OP_INPUT"
+
+    if [[ ${#keys[@]} -eq 0 ]]; then
         [[ $VERBOSE -eq 0 ]] || log_status "from_op: No variables to load from 1Password"
         return 0
     fi
 
     [[ $VERBOSE -eq 0 ]] || log_status "from_op: Loading variables from 1Password"
 
-    # Run op inject first to catch and report errors before eval.
     local injected
-    if ! injected="$(printf '%s\n' "$OP_INPUT" | op inject "${OP_OPTIONS[@]}")"; then
+    if ! injected="$(printf '%s' "$template" | op inject "${OP_OPTIONS[@]}")"; then
         log_error "from_op: 1Password injection failed"
         return 1
     fi
 
-    if [[ $GHA_MASKING -ne 0 ]]; then
-        # Mask secret values in GitHub Actions logs.
-        # See https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#using-workflow-commands-to-access-toolkit-functions
-        printf '%s\n' "$injected" \
-            | while read -r line; do
-                value="${line#*=}"
-                [[ -z $value ]] || echo "::add-mask::${value}"
-            done
+    # Export each "NAME=value" block. Never log the output: it is secret.
+    local i=0 in_value=0 value masked
+    while IFS= read -r line; do
+        if [[ $line == "$marker" ]]; then
+            if [[ $GHA_MASKING -ne 0 && -n $value ]]; then
+                # Mask secret values in GitHub Actions logs. Special characters
+                # must be URL-encoded, `%` first.
+                # See https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#masking-a-value-in-a-log
+                masked="${value//%/%25}"
+                masked="${masked//$'\r'/%0D}"
+                masked="${masked//$'\n'/%0A}"
+                echo "::add-mask::${masked}"
+            fi
+            export "${keys[i]}=$value"
+            i=$((i + 1))
+            in_value=0
+        elif [[ $in_value -ne 0 ]]; then
+            value+=$'\n'"$line"
+        elif [[ $i -lt ${#keys[@]} && $line == "${keys[i]}="* ]]; then
+            value="${line#*=}"
+            in_value=1
+        else
+            log_error "from_op: Unexpected output from 'op inject'"
+            return 1
+        fi
+    done <<<"$injected"
+
+    if [[ $i -ne ${#keys[@]} ]]; then
+        log_error "from_op: Unexpected output from 'op inject'"
+        return 1
     fi
-
-    eval "$(direnv dotenv bash <(
-        printf '%s\n' "$injected" \
-            | while read -r line; do
-                # Skip empty lines
-                [[ -z $line ]] && continue
-
-                key="${line%%=*}"
-                value="${line#*=}"
-
-                # Validate key is a valid shell identifier
-                if [[ ! $key =~ ^$VALID_VAR_NAME_REGEX$ ]]; then
-                    log_error "from_op: Invalid variable name: $key"
-                    continue
-                fi
-
-                # Quote the value using POSIX single-quote form (${var@Q}).
-                # NOTE: do not use `printf %q` here: it emits bash
-                # backslash-escapes (e.g. pa\$\$word) which `direnv dotenv`
-                # (a godotenv parser, not bash) does not understand and
-                # mangles, corrupting values that contain `$`.
-                printf '%s=%s\n' "$key" "${value@Q}"
-            done
-    ))"
 }

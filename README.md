@@ -16,8 +16,10 @@ source_url "https://github.com/tmatilai/direnv-1password/raw/v1.1.0/1password.sh
 # Fetch one secret and export it into the specified environment variable
 from_op MY_SECRET=op://vault/item/field
 
-# Multiple secrets can be fetched by passing the items to the command's STDIN
+# Multiple secrets can be fetched by passing the items to the command's STDIN.
+# Blank lines and comments are ignored.
 from_op <<OP
+    # Values are exported verbatim, including whitespace and newlines.
     FIRST_SECRET=op://vault/item/field
     OTHER_SECRET=op://...
 OP

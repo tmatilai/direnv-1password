@@ -19,7 +19,7 @@ run_envrc() {
         source ./tests/stubs.bash
         source ./1password.sh
         source "$2"
-    ' bash "$REPO_ROOT" "$envrc"
+    ' bash "$REPO_ROOT" "$envrc" </dev/null
 }
 
 @test "fetches one secret into the specified environment variable" {
@@ -223,4 +223,104 @@ BASH
     [ "$status" -eq 0 ]
     [[ $output != *"::add-mask::"* ]]
     [ "$output" = "MY_SECRET=single-secret" ]
+}
+
+@test "preserves multi-line secret values" {
+    envrc="$BATS_TEST_TMPDIR/envrc"
+    cat >"$envrc" <<'BASH'
+from_op MY_KEY=op://vault/multiline/field
+printf '%s' "$MY_KEY" >"$BATS_TEST_TMPDIR/value"
+printf 'OTHER_SECRET=%s\n' "${OTHER_SECRET:-unset}"
+BASH
+
+    run_envrc "$envrc"
+
+    [ "$status" -eq 0 ]
+    [ "$output" = "OTHER_SECRET=unset" ]
+    expected=$'-----BEGIN KEY-----\nline1\n\nOTHER_SECRET=not-a-var\n-----END KEY-----\n'
+    [ "$(cat "$BATS_TEST_TMPDIR/value" && printf x)" = "${expected}x" ]
+}
+
+@test "preserves leading and trailing whitespace in secret values" {
+    envrc="$BATS_TEST_TMPDIR/envrc"
+    cat >"$envrc" <<'BASH'
+from_op MY_SECRET=op://vault/spaces/field
+printf '[%s]\n' "$MY_SECRET"
+BASH
+
+    run_envrc "$envrc"
+
+    [ "$status" -eq 0 ]
+    [ "$output" = $'[ \tpadded secret \t]' ]
+}
+
+@test "ignores whitespace, blank lines and comments in the input" {
+    envrc="$BATS_TEST_TMPDIR/envrc"
+    printf '%s\n' \
+        'from_op <<OP' \
+        '' \
+        '  # comment' \
+        $'\tFIRST_SECRET=op://vault/first/field \t' \
+        'OTHER_SECRET=op://vault/other/field' \
+        'OP' \
+        "printf 'FIRST_SECRET=[%s]\\n' \"\$FIRST_SECRET\"" \
+        "printf 'OTHER_SECRET=[%s]\\n' \"\$OTHER_SECRET\"" >"$envrc"
+
+    run_envrc "$envrc"
+
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "FIRST_SECRET=[first-secret]" ]
+    [ "${lines[1]}" = "OTHER_SECRET=[other-secret]" ]
+}
+
+@test "fails on an invalid variable definition" {
+    envrc="$BATS_TEST_TMPDIR/envrc"
+    cat >"$envrc" <<'BASH'
+from_op <<OP
+MY_SECRET=op://vault/item/field
+not a variable
+OP
+printf 'MY_SECRET=%s\n' "${MY_SECRET:-unset}"
+BASH
+
+    run_envrc "$envrc"
+
+    [ "$status" -eq 1 ]
+    [ "$output" = "ERROR: from_op: Invalid variable definition: not a variable" ]
+    [ ! -s "$OP_ARGS_LOG" ]
+}
+
+@test "masks each value once, URL-encoded, in GitHub Actions" {
+    envrc="$BATS_TEST_TMPDIR/envrc"
+    cat >"$envrc" <<'BASH'
+export GITHUB_ACTIONS=true
+from_op <<OP
+EMPTY=op://vault/empty/field
+PERCENT=op://vault/percent/field
+MULTI=op://vault/multiline/field
+OP
+printf 'done\n'
+BASH
+
+    run_envrc "$envrc"
+
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "::add-mask::100%25%0D%0A" ]
+    [ "${lines[1]}" = "::add-mask::-----BEGIN KEY-----%0Aline1%0A%0AOTHER_SECRET=not-a-var%0A-----END KEY-----%0A" ]
+    [ "${lines[2]}" = "done" ]
+    [ "${#lines[@]}" -eq 3 ]
+}
+
+@test "fails without exporting anything on unexpected op output" {
+    envrc="$BATS_TEST_TMPDIR/envrc"
+    cat >"$envrc" <<'BASH'
+op() { printf 'garbage\n'; }
+from_op MY_SECRET=op://vault/item/field
+printf 'MY_SECRET=%s\n' "${MY_SECRET:-unset}"
+BASH
+
+    run_envrc "$envrc"
+
+    [ "$status" -eq 1 ]
+    [ "$output" = "ERROR: from_op: Unexpected output from 'op inject'" ]
 }
