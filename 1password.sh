@@ -88,18 +88,18 @@ from_op() {
         return 1
     fi
 
+    # `${arr[@]+"${arr[@]}"}` expands empty arrays safely under `set -u` in
+    # bash < 4.4.
     local _op_input _op_file
     _op_input="$(
-        printf '%s\n' "${_op_variables[@]}"
-        if [[ ${#_op_files[@]} -gt 0 ]]; then
-            for _op_file in "${_op_files[@]}"; do
-                if [[ -r $_op_file ]]; then
-                    cat "$_op_file"
-                else
-                    log_error "from_op: Cannot read file: $_op_file"
-                fi
-            done
-        fi
+        printf '%s\n' ${_op_variables[@]+"${_op_variables[@]}"}
+        for _op_file in ${_op_files[@]+"${_op_files[@]}"}; do
+            if [[ -r $_op_file ]]; then
+                cat "$_op_file"
+            else
+                log_error "from_op: Cannot read file: $_op_file"
+            fi
+        done
         [[ $_op_stdin -eq 0 ]] || cat
     )"
 
@@ -140,7 +140,7 @@ from_op() {
     [[ $_op_verbose -eq 0 ]] || log_status "from_op: Loading variables from 1Password"
 
     local _op_injected
-    if ! _op_injected="$(printf '%s' "$_op_template" | op inject "${_op_options[@]}")"; then
+    if ! _op_injected="$(printf '%s' "$_op_template" | op inject ${_op_options[@]+"${_op_options[@]}"})"; then
         log_error "from_op: 1Password injection failed"
         return 1
     fi

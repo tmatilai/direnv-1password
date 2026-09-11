@@ -24,3 +24,43 @@ jobs:
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
 
       - run: nix develop --command make test
+
+  test-macos:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+
+      - run: nix develop --command make test
+
+      - name: Test with the system bash 3.2
+        run: nix develop --command bats tests
+        env:
+          TEST_BASH: /bin/bash
+
+  # Older bash versions from the official Docker images.
+  test-bash:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        bash: ["3.2", "4.4"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: bats-core/bats-core
+          ref: eb7f42f8d608ac693d7a4b67474f6714ea68cfc5 # v1.14.0
+          path: bats-core
+          persist-credentials: false
+
+      - run: docker run --rm -v "$PWD:/work:ro" -w /work "bash:$BASH_TAG" bats-core/bin/bats tests
+        env:
+          BASH_TAG: ${{ matrix.bash }}

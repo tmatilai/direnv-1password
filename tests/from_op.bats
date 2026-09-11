@@ -11,7 +11,9 @@ setup() {
 run_envrc() {
     local envrc=$1
 
-    run bash -c '
+    # TEST_BASH selects the bash that runs the script under test.
+    # shellcheck disable=SC2016
+    run "${TEST_BASH:-bash}" -c '
         set -euo pipefail
         # Masking is opt-in per test.
         unset GITHUB_ACTIONS
