@@ -13,6 +13,8 @@ run_envrc() {
 
     run bash -c '
         set -euo pipefail
+        # Masking is opt-in per test.
+        unset GITHUB_ACTIONS
         cd "$1"
         source ./tests/stubs.bash
         source ./1password.sh
