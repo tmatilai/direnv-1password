@@ -100,6 +100,19 @@ BASH
     [ "$output" = "$expected" ]
 }
 
+@test "preserves quotes, backslashes and backticks in secret values" {
+    envrc="$BATS_TEST_TMPDIR/envrc"
+    cat >"$envrc" <<'BASH'
+from_op MY_SECRET=op://vault/quotes/field
+printf 'MY_SECRET=%s\n' "$MY_SECRET"
+BASH
+
+    run_envrc "$envrc"
+
+    [ "$status" -eq 0 ]
+    [ "$output" = $'MY_SECRET=it\'s "quoted" \\back\\slash `cmd`' ]
+}
+
 @test "fetches multiple secrets from a file and watches it" {
     secrets_file="$BATS_TEST_TMPDIR/.1password"
     cat >"$secrets_file" <<'BASH'

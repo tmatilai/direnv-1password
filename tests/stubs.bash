@@ -49,6 +49,7 @@ op() {
                 op://vault/other/field) value=other-secret ;;
                 op://vault/file/field) value=file-secret ;;
                 op://vault/dollar/field) value=pa\$\$word\$with\$dollars ;;
+                op://vault/quotes/field) value=$'it\'s "quoted" \\back\\slash `cmd`' ;;
                 op://vault/empty/field) value= ;;
                 op://vault/spaces/field) value=$' \tpadded secret \t' ;;
                 op://vault/percent/field) value=$'100%\r\n' ;;
