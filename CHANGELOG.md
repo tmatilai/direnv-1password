@@ -5,6 +5,7 @@
 - Ignore blank lines and comments in all input modes.
 - Read STDIN only when no variable or file arguments are given, or with an explicit `-` argument.
 - Drop the 1Password CLI v1 version check.
+- Fix Bash 3.2 compatibility (macOS `/bin/bash`). Test with Bash 3.2, 4.4 and 5 in CI.
 - URL-encode masked values in GitHub Actions so masking works for values with `%` or newlines.
 - Mask secret values in GitHub Actions logs by default (when `$GITHUB_ACTIONS=true`). Add option `--no-gha-masking` to disable it.
 

@@ -73,7 +73,7 @@ Running `op signin` inside `.envrc` does not work, as there is no terminal to ty
 
 - [direnv](https://direnv.net). Might/should work with any somehow recent v2 version. Developed initially with v2.30.
 - [1Password CLI 2.x](https://support.1password.com/command-line/) (`op`).
-- A shell supported by direnv. Bash v3+ should work.
+- Bash 3.2 or newer. Tested in CI with Bash 3.2, 4.4 and 5.
 
 ---
 
