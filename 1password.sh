@@ -4,7 +4,7 @@
 # 1Password helpers for direnv configuration.
 #
 # VERSION:
-#    1.1.0
+#    1.2.0
 #
 # HOMEPAGE:
 #     https://github.com/tmatilai/direnv-1password
@@ -15,7 +15,7 @@
 #     See the homepage for details.
 #
 # LICENCE:
-#     MIT licence - Copyright (c) 2022-2025 Teemu Matilainen and contributors
+#     MIT licence - Copyright (c) 2022-2026 Teemu Matilainen and contributors
 #
 ###########################################################################
 
