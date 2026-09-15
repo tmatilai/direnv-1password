@@ -17,6 +17,7 @@ source_url "https://github.com/tmatilai/direnv-1password/raw/v1.1.0/1password.sh
 from_op MY_SECRET=op://vault/item/field
 
 # Multiple secrets can be fetched by passing the items to the command's STDIN.
+# STDIN is read only when no variable or file arguments are given, or with `-`.
 # Blank lines and comments are ignored.
 from_op <<OP
     # Values are exported verbatim, including whitespace and newlines.
@@ -45,30 +46,26 @@ from_op --no-gha-masking MY_SECRET=op://vault/item/field
 
 The reference format is [described here](https://developer.1password.com/docs/cli/secrets-reference-syntax/). Vault, item and field can be referred either by name or ID.
 
-With 1Password CLI v1 the section (referred in the docs) can not be used, so in some cases the item ID has to be used.
-
 ### 1Password login
 
-For the `from_op` command (or actually the underlying `op` command) to work, a valid 1Password session has to exist.
+`from_op` runs `op inject`, which needs an authenticated `op`. direnv evaluates `.envrc` without a terminal, so `op` cannot ask for a password there. There are three ways to authenticate:
 
-One option is to [sign in](https://support.1password.com/command-line-reference/#signin) manually before `.envrc` evaluation. For example:
+- **Desktop app integration.** With the [app integration](https://developer.1password.com/docs/cli/app-integration/) enabled, `op` asks the 1Password app for authorization. The `.envrc` evaluation waits until the prompt is answered.
+- **Manual sign-in.** [Sign in](https://support.1password.com/command-line-reference/#signin) in the shell before the `.envrc` evaluation, then run `direnv reload`:
 
-```bash
-# Bash, ZSH, etc.
-eval $(op signin ACCOUNT)
-```
+  ```bash
+  # Bash, ZSH, etc.
+  eval $(op signin ACCOUNT)
+  ```
 
-```fish
-# Fish
-eval (op signin ACCOUNT)
-```
+  ```fish
+  # Fish
+  eval (op signin ACCOUNT)
+  ```
 
-The `.envrc` evaluation can then be forced with e.g. `direnv reload`.
+- **Service account or 1Password Connect.** Set `OP_SERVICE_ACCOUNT_TOKEN`, or `OP_CONNECT_HOST` and `OP_CONNECT_TOKEN`. Every `op` call then authenticates on its own. This is the option for CI.
 
-Other option is to add the `op signin` command into the `.envrc`, but that will block the evaluation.
-This might go against the best practices with direnv, as `.envrc` evaluations should in general be fast and non-blocking. But you decide.
-
-Future versions of the library hopefully offer helpers for the login, too.
+Running `op signin` inside `.envrc` does not work, as there is no terminal to type the password into.
 
 ---
 

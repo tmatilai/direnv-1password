@@ -21,39 +21,34 @@
 
 # Read environment variable values from 1Password.
 from_op() {
-    local OP_VARIABLES=()
-    local OP_FILES=()
-    local OP_OPTIONS=()
-    local OVERWRITE_ENVVARS=1
-    local VERBOSE=0
-    local GHA_MASKING=1
-    [[ ${GITHUB_ACTIONS:-} == "true" ]] || GHA_MASKING=0
-    local VALID_VAR_NAME_REGEX='[A-Za-z_][A-Za-z0-9_]*'
+    # Locals are prefixed so they cannot shadow the variables being exported.
+    local _op_variables=()
+    local _op_files=()
+    local _op_options=()
+    local _op_stdin=0
+    local _op_overwrite=1
+    local _op_verbose=0
+    local _op_masking=1
+    [[ ${GITHUB_ACTIONS:-} == "true" ]] || _op_masking=0
+    local _op_name_regex='[A-Za-z_][A-Za-z0-9_]*'
 
     if ! has op; then
         log_error "1Password CLI 'op' not found"
         return 1
     fi
 
-    case "$(op --version)" in
-        1.*)
-            log_error "1Password CLI v1 is no longer supported. Please upgrade to 1password CLI v2. See https://developer.1password.com/docs/cli/upgrade/"
-            return 1
-            ;;
-    esac
-
     while [[ $# -gt 0 ]]; do
         case $1 in
             --no-overwrite)
-                OVERWRITE_ENVVARS=0
+                _op_overwrite=0
                 shift
                 ;;
             --verbose)
-                VERBOSE=1
+                _op_verbose=1
                 shift
                 ;;
             --no-gha-masking)
-                GHA_MASKING=0
+                _op_masking=0
                 shift
                 ;;
             --account)
@@ -61,116 +56,123 @@ from_op() {
                     log_error "from_op: --account requires an argument"
                     return 1
                 fi
-                OP_OPTIONS+=(--account "$2")
+                _op_options+=(--account "$2")
                 shift 2
                 ;;
             --*)
                 log_error "from_op: Unknown option: $1"
                 return 1
                 ;;
+            -)
+                _op_stdin=1
+                shift
+                ;;
             *=*)
-                OP_VARIABLES+=("$1")
+                _op_variables+=("$1")
                 shift
                 ;;
             *)
-                OP_FILES+=("$1")
+                _op_files+=("$1")
                 watch_file "$1"
                 shift
                 ;;
         esac
     done
 
-    if [[ -t 0 ]] && [[ ${#OP_VARIABLES[@]} -eq 0 ]] && [[ ${#OP_FILES[@]} -eq 0 ]]; then
+    # Read stdin only when no variable or file arguments are given, or with `-`.
+    if [[ ${#_op_variables[@]} -eq 0 && ${#_op_files[@]} -eq 0 ]]; then
+        _op_stdin=1
+    fi
+    if [[ $_op_stdin -ne 0 && -t 0 ]]; then
         log_error "from_op: No input nor arguments given"
         return 1
     fi
 
-    local OP_INPUT
-    OP_INPUT="$(
-        # Concatenate variable-args, file-args and stdin.
-        printf '%s\n' "${OP_VARIABLES[@]}"
-        if [[ ${#OP_FILES[@]} -gt 0 ]]; then
-            # Read files if they exist; warn if not.
-            for f in "${OP_FILES[@]}"; do
-                if [[ -r $f ]]; then
-                    cat "$f"
+    local _op_input _op_file
+    _op_input="$(
+        printf '%s\n' "${_op_variables[@]}"
+        if [[ ${#_op_files[@]} -gt 0 ]]; then
+            for _op_file in "${_op_files[@]}"; do
+                if [[ -r $_op_file ]]; then
+                    cat "$_op_file"
                 else
-                    log_error "from_op: Cannot read file: $f"
+                    log_error "from_op: Cannot read file: $_op_file"
                 fi
             done
         fi
-        [[ -t 0 ]] || cat
+        [[ $_op_stdin -eq 0 ]] || cat
     )"
 
     # Build the `op inject` template: one "NAME=reference" line per variable,
     # each followed by a marker line. Values may span multiple lines, so the
     # marker is what tells the output parser where a value ends.
-    local marker="# from_op end ${RANDOM}${RANDOM}"
-    local keys=()
-    local template=""
-    local line key
-    while IFS= read -r line; do
+    local _op_marker="# from_op end ${RANDOM}${RANDOM}"
+    local _op_keys=()
+    local _op_template=""
+    local _op_line _op_key
+    while IFS= read -r _op_line; do
         # Trim whitespace, skip blank lines and comments.
-        line="${line#"${line%%[![:space:]]*}"}"
-        line="${line%"${line##*[![:space:]]}"}"
-        [[ -z $line || $line == \#* ]] && continue
+        _op_line="${_op_line#"${_op_line%%[![:space:]]*}"}"
+        _op_line="${_op_line%"${_op_line##*[![:space:]]}"}"
+        [[ -z $_op_line || $_op_line == \#* ]] && continue
 
-        if [[ ! $line =~ ^($VALID_VAR_NAME_REGEX)= ]]; then
-            log_error "from_op: Invalid variable definition: $line"
+        if [[ ! $_op_line =~ ^($_op_name_regex)= ]]; then
+            log_error "from_op: Invalid variable definition: $_op_line"
             return 1
         fi
-        key="${BASH_REMATCH[1]}"
+        _op_key="${BASH_REMATCH[1]}"
 
-        # Respect --no-overwrite even if the variable is set to empty.
-        if [[ $OVERWRITE_ENVVARS -eq 0 && -n ${!key+x} ]]; then
+        # With --no-overwrite, skip variables that are set, even to an empty
+        # value. `${var+x}` expands to `x` only if the variable is set.
+        if [[ $_op_overwrite -eq 0 && -n ${!_op_key+x} ]]; then
             continue
         fi
 
-        keys+=("$key")
-        template+="$line"$'\n'"$marker"$'\n'
-    done <<<"$OP_INPUT"
+        _op_keys+=("$_op_key")
+        _op_template+="$_op_line"$'\n'"$_op_marker"$'\n'
+    done <<<"$_op_input"
 
-    if [[ ${#keys[@]} -eq 0 ]]; then
-        [[ $VERBOSE -eq 0 ]] || log_status "from_op: No variables to load from 1Password"
+    if [[ ${#_op_keys[@]} -eq 0 ]]; then
+        [[ $_op_verbose -eq 0 ]] || log_status "from_op: No variables to load from 1Password"
         return 0
     fi
 
-    [[ $VERBOSE -eq 0 ]] || log_status "from_op: Loading variables from 1Password"
+    [[ $_op_verbose -eq 0 ]] || log_status "from_op: Loading variables from 1Password"
 
-    local injected
-    if ! injected="$(printf '%s' "$template" | op inject "${OP_OPTIONS[@]}")"; then
+    local _op_injected
+    if ! _op_injected="$(printf '%s' "$_op_template" | op inject "${_op_options[@]}")"; then
         log_error "from_op: 1Password injection failed"
         return 1
     fi
 
     # Export each "NAME=value" block. Never log the output: it is secret.
-    local i=0 in_value=0 value masked
-    while IFS= read -r line; do
-        if [[ $line == "$marker" ]]; then
-            if [[ $GHA_MASKING -ne 0 && -n $value ]]; then
+    local _op_i=0 _op_in_value=0 _op_value _op_masked
+    while IFS= read -r _op_line; do
+        if [[ $_op_line == "$_op_marker" ]]; then
+            if [[ $_op_masking -ne 0 && -n $_op_value ]]; then
                 # Mask secret values in GitHub Actions logs. Special characters
                 # must be URL-encoded, `%` first.
                 # See https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#masking-a-value-in-a-log
-                masked="${value//%/%25}"
-                masked="${masked//$'\r'/%0D}"
-                masked="${masked//$'\n'/%0A}"
-                echo "::add-mask::${masked}"
+                _op_masked="${_op_value//%/%25}"
+                _op_masked="${_op_masked//$'\r'/%0D}"
+                _op_masked="${_op_masked//$'\n'/%0A}"
+                echo "::add-mask::${_op_masked}"
             fi
-            export "${keys[i]}=$value"
-            i=$((i + 1))
-            in_value=0
-        elif [[ $in_value -ne 0 ]]; then
-            value+=$'\n'"$line"
-        elif [[ $i -lt ${#keys[@]} && $line == "${keys[i]}="* ]]; then
-            value="${line#*=}"
-            in_value=1
+            export "${_op_keys[_op_i]}=$_op_value"
+            _op_i=$((_op_i + 1))
+            _op_in_value=0
+        elif [[ $_op_in_value -ne 0 ]]; then
+            _op_value+=$'\n'"$_op_line"
+        elif [[ $_op_i -lt ${#_op_keys[@]} && $_op_line == "${_op_keys[_op_i]}="* ]]; then
+            _op_value="${_op_line#*=}"
+            _op_in_value=1
         else
             log_error "from_op: Unexpected output from 'op inject'"
             return 1
         fi
-    done <<<"$injected"
+    done <<<"$_op_injected"
 
-    if [[ $i -ne ${#keys[@]} ]]; then
+    if [[ $_op_i -ne ${#_op_keys[@]} ]]; then
         log_error "from_op: Unexpected output from 'op inject'"
         return 1
     fi
