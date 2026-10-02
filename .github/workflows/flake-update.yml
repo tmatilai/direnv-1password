@@ -12,8 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -25,17 +24,42 @@ jobs:
 
       - run: nix develop --command make test
 
-      # Note: a PR opened with GITHUB_TOKEN does not trigger the Test workflow.
-      # Set the FLAKE_UPDATE_TOKEN secret (fine-grained PAT: contents + pull requests write) to fix that.
-      - env:
-          GH_TOKEN: ${{ secrets.FLAKE_UPDATE_TOKEN || github.token }}
+      # The app token makes Test run on the PR; GITHUB_TOKEN does not trigger workflows
+      - name: Generate token
+        id: generate-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      # Committed through the API so that GitHub signs it, as main requires signed commits
+      - name: Open the pull request
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
           git diff --quiet flake.lock && exit 0
-          gh auth setup-git
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git switch -c flake-update
-          git commit -m "chore: update flake.lock" flake.lock
-          git push --force origin flake-update
-          gh pr list --head flake-update --json number --jq length | grep -q '^0$' || exit 0
-          gh pr create --title "chore: update flake.lock" --body "Automated \`nix flake update\`."
+          branch='flake-update'
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$branch" --silent 2>/dev/null; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/$branch" --silent -f sha="$GITHUB_SHA" -F force=true
+          else
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" --silent -f ref="refs/heads/$branch" -f sha="$GITHUB_SHA"
+          fi
+          jq -n \
+            --arg repo "$GITHUB_REPOSITORY" \
+            --arg branch "$branch" \
+            --arg oid "$GITHUB_SHA" \
+            --rawfile lock flake.lock \
+            '{
+              query: "mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }",
+              variables: {input: {
+                branch: {repositoryNameWithOwner: $repo, branchName: $branch},
+                expectedHeadOid: $oid,
+                message: {headline: "chore: update flake.lock"},
+                fileChanges: {additions: [{path: "flake.lock", contents: ($lock | @base64)}]}
+              }}
+            }' > "$RUNNER_TEMP/commit.json"
+          gh api graphql --silent --input "$RUNNER_TEMP/commit.json"
+          gh pr list --head "$branch" --json number --jq length | grep -q '^0$' || exit 0
+          gh pr create --base main --head "$branch" --title "chore: update flake.lock" --body "Automated \`nix flake update\`."
