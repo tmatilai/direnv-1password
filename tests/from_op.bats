@@ -329,7 +329,7 @@ BASH
 @test "fails without exporting anything on unexpected op output" {
     envrc="$BATS_TEST_TMPDIR/envrc"
     cat >"$envrc" <<'BASH'
-op() { printf 'garbage\n'; }
+op() { cat >/dev/null; printf 'garbage\n'; }
 from_op MY_SECRET=op://vault/item/field
 printf 'MY_SECRET=%s\n' "${MY_SECRET:-unset}"
 BASH
